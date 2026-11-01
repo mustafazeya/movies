@@ -1,0 +1,47 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta name="robots" content="noindex">
+  <title>Trailer</title>
+  <style>html,body{margin:0;height:100%;background:#000;overflow:hidden}#p{width:100%;height:100%}</style>
+</head>
+<body>
+<div id="p"></div>
+<script>
+  // Makeflix trailer wrapper. TV apps run from file:// and send no referrer, which makes YouTube
+  // embeds fail with error 153. Loaded from this https page, the embed gets a valid origin.
+  var videoId = (new URLSearchParams(location.search).get('v') || '').trim();
+  var valid = /^[A-Za-z0-9_-]{6,20}$/.test(videoId);
+  var player;
+
+  function send(m) { m.source = 'mf-trailer'; parent.postMessage(m, '*'); }
+
+  if (!valid) send({ type: 'error', code: 'invalid-id' });
+
+  function onYouTubeIframeAPIReady() {
+    if (!valid) return;
+    player = new YT.Player('p', {
+      videoId: videoId,
+      width: '100%',
+      height: '100%',
+      playerVars: { autoplay: 1, controls: 0, rel: 0, playsinline: 1, iv_load_policy: 3, origin: location.origin },
+      events: {
+        onReady: function (e) { e.target.playVideo(); send({ type: 'ready' }); },
+        onStateChange: function (e) { send({ type: 'state', state: e.data, time: player.getCurrentTime(), duration: player.getDuration() }); },
+        onError: function (e) { send({ type: 'error', code: e.data }); }
+      }
+    });
+  }
+
+  window.addEventListener('message', function (e) {
+    var d = e.data || {};
+    if (!player || d.source !== 'mf-app') return;
+    if (d.cmd === 'toggle') { if (player.getPlayerState() === 1) player.pauseVideo(); else player.playVideo(); }
+    if (d.cmd === 'seek') player.seekTo(Math.max(0, player.getCurrentTime() + d.value), true);
+  });
+</script>
+<script src="https://www.youtube.com/iframe_api"></script>
+</body>
+</html>
